@@ -26,7 +26,7 @@ This project involves training and evaluating several Natural Language Processin
    - **Description**: Similar to the mT5 notebook, this Jupyter notebook trains an abstractive summarization model using mBART, a sequence-to-sequence model designed for multilingual text generation tasks. The notebook follows the same process of loading, preprocessing data, training the model, and evaluating the results.
    - **Key Steps**:
      - Dataset Preprocessing
-     - Model Initialization (`facebook/mbart-large-cc25`)
+     - Model Initialization (`facebook/mbart-large-50-many-to-many-mmt`)
      - Model Training and Evaluation
 
 ### 5. **extractive_summarization_KG.ipynb**
