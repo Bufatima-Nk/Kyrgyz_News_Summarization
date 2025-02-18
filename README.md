@@ -41,7 +41,4 @@ This project involves training and evaluating several Natural Language Processin
 
 ## Requirements
 
-To run the notebooks and models, you will need to install the following Python libraries:
-
-```bash
-pip install transformers torch scikit-learn rouge-score nltk bert-score matplotlib seaborn pandas
+To run the notebooks and models, you will need to install required dependencies.
