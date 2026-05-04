@@ -1,44 +1,162 @@
-# Kyrgyz News Summarization Project
+# Kyrgyz News Summarization — NLP for a Low-Resource Language
 
-This project involves training and evaluating several Natural Language Processing (NLP) models for the task of abstractive summarization and extractive summarization, specifically for news articles in Kyrgyz. The models used include mT5, mBART, and extractive-based methods. The goal of this project is to build models capable of summarizing Kyrgyz news articles effectively.
+> Comparative study of abstractive and extractive summarization techniques for Kyrgyz-language news articles. Fine-tuned **mT5** and **mBART-50** transformer models, benchmarked against two extractive baselines, and evaluated across ROUGE, BLEU, METEOR, and BERTScore.
 
-## Files in the Repository
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
+![HuggingFace](https://img.shields.io/badge/HuggingFace-Transformers-orange?logo=huggingface)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red?logo=pytorch)
+![Language](https://img.shields.io/badge/Language-Kyrgyz%20(ky__KG)-purple)
+![Status](https://img.shields.io/badge/Status-Complete-brightgreen)
 
-### 1. **news.csv**
-   - **Description**: This is the dataset containing Kyrgyz news articles and their corresponding summaries. The dataset is used to train and evaluate the summarization models.
-   - **Columns**:
-     - `content`: The full text of the news article.
-     - `summary`: The human-written summary of the article.
+---
 
-### 2. **my_data.csv**
-   - **Description**: Another dataset for summarization purposes, likely custom data containing additional news content in Kyrgyz, used for training or evaluation.
+## Why This Project Matters
 
-### 3. **mt5_abstractive_summarization_KG.ipynb**
-   - **Description**: Jupyter Notebook for training an abstractive summarization model using mT5, a pre-trained model designed for sequence-to-sequence tasks. This notebook loads the `news.csv` dataset, preprocesses the data, fine-tunes the mT5 model, and evaluates it using various metrics like BLEU, ROUGE, and BertScore.
-   - **Key Steps**:
-     - Dataset Preprocessing
-     - Model Initialization (`google/mt5-small`)
-     - Model Training using the Trainer API
-     - Evaluation on the validation set
-     - Generation of summaries for sample news articles
+Kyrgyz is a Turkic language spoken by ~5 million people, written in Cyrillic script, and highly agglutinative — making NLP significantly harder than for high-resource languages. Publicly available labeled summarization datasets for Kyrgyz are extremely scarce, and most existing multilingual models have minimal Kyrgyz pretraining coverage.
 
-### 4. **mbart_abstractive_summarization_KG.ipynb**
-   - **Description**: Similar to the mT5 notebook, this Jupyter notebook trains an abstractive summarization model using mBART, a sequence-to-sequence model designed for multilingual text generation tasks. The notebook follows the same process of loading, preprocessing data, training the model, and evaluating the results.
-   - **Key Steps**:
-     - Dataset Preprocessing
-     - Model Initialization (`facebook/mbart-large-50-many-to-many-mmt`)
-     - Model Training and Evaluation
+This project applies state-of-the-art multilingual transformer models to Kyrgyz news summarization, compares them against strong extractive baselines, and surfaces concrete insights about what works — and why — in low-resource NLP settings.
 
-### 5. **extractive_summarization_KG.ipynb**
-   - **Description**: This notebook focuses on extractive summarization techniques, where the model selects the most important sentences or parts from the news article to form a summary. It leverages extractive techniques like TF-IDF or transformers such as BERT for sentence extraction.
-   - **Key Steps**:
-     - Data Preprocessing for extractive summarization
-     - Implementation of extractive methods like TF-IDF, BERT-based embeddings
-     - Generation and Evaluation of extractive summaries
+---
 
-### 6. **README.md**
-   - **Description**: The file you're reading now, which provides an overview of the project, its files, and how to run and use them.
+## Results
 
-## Requirements
+| Method | Model | ROUGE-1 | ROUGE-2 | ROUGE-L | BLEU | METEOR | BERTScore |
+|--------|-------|:-------:|:-------:|:-------:|:----:|:------:|:---------:|
+| Extractive (FastText + TF-IDF scoring) | Custom | 0.458 | 0.200 | 0.441 | 0.089 | 0.446 | 0.741 |
+| Extractive (TextRank + TF-IDF) | Custom | 0.366 | 0.115 | 0.312 | 0.099 | 0.361 | 0.742 |
+| Abstractive | mT5-small | 0.193 | 0.026 | 0.191 | 0.081 | — | **0.919** |
+| Abstractive | mBART-50 (6 epochs) | **0.303** | **0.081** | **0.295** | — | — | — |
 
-To run the notebooks and models, you will need to install required dependencies.
+### Key Findings
+
+**1. Extractive methods outperform abstractive fine-tuning at this data scale.**
+With limited labeled data, extractive approaches (which select existing sentences) consistently beat fine-tuned seq2seq models. This is expected — abstractive models require significantly more training examples to generate fluent, accurate summaries.
+
+**2. mBART-50 substantially outperforms mT5-small (ROUGE-1: 30.3 vs 19.3).**
+mBART-50-many-to-many was explicitly pretrained on Kyrgyz (`ky_KG`), giving it native morphological and lexical knowledge. mT5-small's Kyrgyz coverage in pretraining is minimal. Architecture alignment with the target language matters more than model size at low data regimes.
+
+**3. mT5's high BERTScore (0.919) despite low ROUGE reveals a known low-resource NLP phenomenon.**
+The model generates semantically coherent content that is not a surface-level match to the reference — plausible but paraphrased summaries. ROUGE penalizes this heavily; BERTScore captures semantic similarity and scores it highly. In practice, human evaluation would be needed to resolve which metric better reflects real quality.
+
+**4. FastText + TF-IDF hybrid scoring (Extractive 1) beats pure TextRank (Extractive 2).**
+Combining semantic sentence embeddings (FastText), positional bias, and keyword relevance (TF-IDF) outperforms graph-based TextRank across all ROUGE metrics, suggesting that positional heuristics are informative for Kyrgyz news structure.
+
+---
+
+## Approach
+
+### Abstractive Summarization
+Fine-tuned two pretrained multilingual seq2seq models on a Kyrgyz news dataset:
+
+- **mT5-small** (`google/mt5-small`) — Text-to-Text Transfer Transformer, multilingual variant
+  - Custom `KyrgyzNewsDataset` PyTorch class with proper padding and label masking
+  - HuggingFace `Trainer` API, 10 epochs, lr=3e-5, batch size=4
+  - Beam search decoding (num_beams=4)
+
+- **mBART-50** (`facebook/mbart-large-50-many-to-many-mmt`) — Multilingual BART with native Kyrgyz support
+  - `Seq2SeqTrainer` with `predict_with_generate=True`
+  - fp16 mixed-precision training, 6 epochs
+  - Source and target language explicitly set to `ky_KG`
+
+### Extractive Summarization
+Two custom extractive pipelines:
+
+- **Method 1 — FastText Hybrid:** FastText sentence embeddings + cosine similarity to document centroid + TF-IDF keyword scoring + positional bias → weighted sentence ranking
+- **Method 2 — TextRank:** TF-IDF vectorization → cosine similarity matrix → PageRank via NetworkX → top-k sentence extraction
+
+### Evaluation
+All models evaluated on the same held-out validation split using:
+- **ROUGE-1/2/L** (surface n-gram overlap)
+- **BLEU** (n-gram precision with brevity penalty)
+- **METEOR** (synonym-aware recall)
+- **BERTScore** (`bert-base-multilingual-cased`, lang=`ky`)
+
+---
+
+## Dataset
+
+- **Source:** Kyrgyz news articles scraped from public news sources
+- **Files:** `news.csv` (primary), `my_data.csv` (additional)
+- **Columns:** `content` (full article text), `summary` (human-written summary)
+- **Language:** Kyrgyz (ISO 639-1: `ky`, Cyrillic script)
+- **Split:** 90% train / 10% validation (`random_state=42`)
+
+---
+
+## Project Structure
+
+```
+Kyrgyz_News_Summarization/
+│
+├── mt5_abstractive_summarization_KG.ipynb       # mT5 fine-tuning + evaluation
+├── mbart_abstractive_summarization_KG.ipynb     # mBART-50 fine-tuning + evaluation
+├── extractive_summarization_KG.ipynb            # Two extractive pipelines + Gradio demo
+│
+├── news.csv                                     # Primary dataset
+├── my_data.csv                                  # Additional training data
+│
+├── requirements.txt                             # All dependencies
+└── README.md
+```
+
+---
+
+## How to Run
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/Bufatima-Nk/Kyrgyz_News_Summarization
+cd Kyrgyz_News_Summarization
+```
+
+### 2. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Run notebooks in order
+```bash
+jupyter notebook
+```
+
+Open and run cells in any notebook:
+- `extractive_summarization_KG.ipynb` — no GPU required, runs fast
+- `mt5_abstractive_summarization_KG.ipynb` — GPU recommended (Google Colab works)
+- `mbart_abstractive_summarization_KG.ipynb` — GPU required (mBART-50 is large)
+
+### 4. Try the Gradio demo (extractive)
+The last cell of `extractive_summarization_KG.ipynb` launches an interactive demo:
+```python
+interface.launch()  # Opens local UI to summarize any Kyrgyz text
+```
+
+---
+
+## Tech Stack
+
+| Category | Tools |
+|----------|-------|
+| Deep Learning | PyTorch, HuggingFace Transformers, Datasets |
+| Models | `google/mt5-small`, `facebook/mbart-large-50-many-to-many-mmt` |
+| Extractive NLP | Gensim FastText, scikit-learn TF-IDF, NetworkX PageRank |
+| Evaluation | rouge-score, NLTK (BLEU, METEOR), bert-score |
+| Demo | Gradio |
+| Data | pandas, NumPy |
+
+---
+
+## Limitations & Future Work
+
+- **Dataset size** is the primary bottleneck. Abstractive models would likely improve significantly with 5–10× more labeled pairs.
+- **mT5 results** could improve with longer training, larger model variant (mT5-base), or prefix tuning instead of full fine-tuning.
+- **Human evaluation** is needed to validate BERTScore's optimistic assessment of mT5 outputs — automated metrics alone are insufficient for low-resource languages.
+- **Deployment:** Both Gradio demos can be deployed to [HuggingFace Spaces](https://huggingface.co/spaces) for permanent public access.
+
+---
+
+## Author
+
+**Bufatima N.K.**
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-bufatima--n--k-blue?logo=linkedin)](https://linkedin.com/in/bufatima-n-k)
+[![GitHub](https://img.shields.io/badge/GitHub-Bufatima--Nk-black?logo=github)](https://github.com/Bufatima-Nk)
